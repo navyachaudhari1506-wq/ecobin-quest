@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>EcoBin Quest</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+:root{--bg:#f3f8f1;--card:#fff;--tx:#17301f;--mut:#5d7366;--ac:#2e8b57;--ac2:#e3f3e8;--bd:#d3e3d8;--on:#fff;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1a14;--card:#17261d;--tx:#e6f2ea;--mut:#9bb4a3;--ac:#4cc283;--ac2:#1d3326;--bd:#2a4234;--on:#08210f}}
+:root[data-theme="dark"]{--bg:#0f1a14;--card:#17261d;--tx:#e6f2ea;--mut:#9bb4a3;--ac:#4cc283;--ac2:#1d3326;--bd:#2a4234;--on:#08210f}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:76px}
+main{max-width:520px;margin:0 auto;padding:14px}
+h1{font-size:22px;margin:4px 0}h2{font-size:18px;margin:0 0 8px}p{margin:4px 0}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:14px;margin:12px 0}
+.mut{color:var(--mut);font-size:14px}
+button,input,select{font:inherit;color:inherit}
+.btn{background:var(--ac);color:var(--on);border:0;border-radius:12px;padding:12px 16px;font-weight:700;width:100%;cursor:pointer}
+.btn.alt{background:var(--ac2);color:var(--tx);border:1px solid var(--bd)}.btn:disabled{opacity:.45}
+input,select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--bd);background:var(--bg);margin:4px 0 8px}
+nav{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--bd);display:flex;padding-bottom:env(safe-area-inset-bottom,0px);z-index:5}
+nav button{flex:1;background:none;border:0;padding:10px 2px;font-size:12px;color:var(--mut)}
+nav button.on{color:var(--ac);font-weight:700}nav span{display:block;font-size:20px}
+.hero{display:flex;align-items:center;gap:12px}.pts{font-size:34px;font-weight:800;color:var(--ac)}
+.bar{height:10px;background:var(--ac2);border-radius:9px;overflow:hidden;margin:8px 0}.bar i{display:block;height:100%;background:var(--ac)}
+.row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--bd)}.row:last-child{border:0}
+.row b.r{width:28px;text-align:center}.row .g{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.me{background:var(--ac2);border-radius:10px;padding-left:6px;padding-right:6px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}.chip{border:1px solid var(--bd);border-radius:12px;padding:9px 12px;background:var(--bg);cursor:pointer}
+.chip.on{background:var(--ac);color:var(--on);border-color:var(--ac)}
+.qty{display:flex;align-items:center;gap:14px;justify-content:center;margin:8px 0}.qty button{width:44px;height:44px;border-radius:50%;border:1px solid var(--bd);background:var(--bg);font-size:22px}
+.rcpt{border:2px dashed var(--ac);border-radius:14px;padding:12px;text-align:center}
+.lock{opacity:.5}.tag{font-size:12px;background:var(--ac2);border-radius:8px;padding:2px 8px}
+.qrs{display:grid;grid-template-columns:1fr 1fr;gap:10px}.qrs div{text-align:center;padding:10px;border:1px solid var(--bd);border-radius:12px;background:#fff;color:#000;font-size:13px}.qrs canvas,.qrs img{max-width:100%}
+canvas.cert{width:100%;border:1px solid var(--bd);border-radius:10px}
+</style></head><body><main id="app"></main>
+<nav id="nav"></nav>
+<script>
+const BINS={
+wet:{n:"Green bin",s:"Wet waste",e:"🟢",items:[["Food scraps",4],["Fruit & veg peels",4],["Dry leaves",3]]},
+dry:{n:"Blue bin",s:"Dry paper",e:"🔵",items:[["Paper",6],["Cardboard",6],["Old notebook pages",6]]},
+rec:{n:"Yellow bin",s:"Plastic & metal",e:"🟡",items:[["Plastic bottle",10],["Metal can",10],["Clean plastic container",8]]},
+ewaste:{n:"Red bin",s:"E-waste & batteries",e:"🔴",items:[["Used battery",20],["Charger / cable",25],["Small electronic item",25]]}};
+const TIERS=[[50,"🌱","Green Sprout","Digital badge + eco sticker"],[150,"✏️","Seed Pencil","Plantable pencil from the Eco Club"],[300,"🎟️","Canteen Coupon","₹10 off at the school canteen"],[500,"🏅","Eco Warrior","Certificate + shout-out in assembly"],[1000,"🌳","Green Champion","Tree planted in your name + trophy"]];
+const MAXQ=5,DAILY=100,COOL=60,BONUS=5,MAXSTREAK=5;
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const day=()=>new Date().toISOString().slice(0,10);
+let tab="dispose",bin=(location.hash||"").slice(1),sel=null,qty=1,receipt=null,board=[],db=null,uid=null,live=false;
+let me=load();
+function load(){try{return JSON.parse(localStorage.getItem("eq_me"))||null}catch(e){return null}}
+function blank(n,c){return{name:n,cls:c,points:0,streak:0,lastDay:"",today:day(),todayPts:0,lastTs:0,log:[],claimed:{}}}
+async function save(){
+ try{localStorage.setItem("eq_me",JSON.stringify(me))}catch(e){}
+ if(db&&uid){try{await db.doc("players/"+uid).set(me)}catch(e){}}
+}
+async function init(){
+ draw();
+ try{
+  if(!window.claude)return;
+  const u=await claude.use("user"),d=await claude.use("db");
+  if(!u||!d)return;
+  uid=await u.id();db=d;live=true;
+  const snap=await db.doc("players/"+uid).get();
+  if(snap.exists){me=Object.assign(blank("",""),snap.data())}else if(me){await save()}
+  const t=setTimeout(()=>{},10000);
+  db.collection("players").orderBy("points","desc").limit(50).onSnapshot(s=>{clearTimeout(t);board=s.docs.map(x=>Object.assign({id:x.id},x.data()));draw()},()=>{});
+  draw();
+ }catch(e){}
+}
+window.addEventListener("hashchange",()=>{bin=(location.hash||"").slice(1);sel=null;receipt=null;draw()});
+function nav(){
+ const T=[["dispose","♻️","Dispose"],["board","🏆","Leaders"],["rewards","🎁","Rewards"],["cert","📜","Certificate"],["bins","🖨️","QR codes"]];
+ $("#nav").innerHTML=T.map(t=>`<button class="${tab==t[0]?"on":""}" data-t="${t[0]}"><span>${t[1]}</span>${t[2]}</button>`).join("");
+ $("#nav").querySelectorAll("button").forEach(b=>b.onclick=()=>{tab=b.dataset.t;draw()});
+}
+function rollDay(){if(me.today!==day()){me.today=day();me.todayPts=0}}
+function draw(){
+ nav();const a=$("#app");
+ if(!me){a.innerHTML=`<h1>♻️ EcoBin Quest</h1><p class="mut">Dispose right. Earn points. Win rewards for your class.</p><div class="card"><h2>Join the quest</h2><label class="mut">Your name</label><input id="nm" maxlength="24" placeholder="e.g. Aarav"><label class="mut">Class / section</label><input id="cl" maxlength="8" placeholder="e.g. 8-B"><button class="btn" id="go">Start</button></div>`;
+  $("#go").onclick=()=>{const n=$("#nm").value.trim(),c=$("#cl").value.trim().toUpperCase();if(!n||!c)return;me=blank(n,c);save();draw()};return}
+ rollDay();
+ ({dispose:vDispose,board:vBoard,rewards:vRewards,cert:vCert,bins:vBins})[tab](a);
+}
+function tierInfo(){let cur=null,nxt=TIERS[0];for(const t of TIERS){if(me.points>=t[0])cur=t;}nxt=TIERS.find(t=>me.points<t[0]);return{cur,nxt}}
+function head(){const{cur,nxt}=tierInfo();const pct=nxt?Math.min(100,(me.points-(cur?cur[0]:0))/(nxt[0]-(cur?cur[0]:0))*100):100;
+ return`<div class="card"><div class="hero"><div style="font-size:38px">${cur?cur[1]:"🌍"}</div><div><div class="mut">${esc(me.name)} · Class ${esc(me.cls)}</div><div class="pts">${me.points} pts</div></div></div><div class="bar"><i style="width:${pct}%"></i></div><p class="mut">${nxt?`${nxt[0]-me.points} pts to ${nxt[2]} ${nxt[1]}`:"Max level reached! 🎉"} · 🔥 ${me.streak}-day streak</p></div>`}
+function calc(b,item,q){const base=BINS[b].items.find(i=>i[0]==item)[1];let p=base*q;let bonus=0;if(me.lastDay!==day()){const ns=me.lastDay===yest()?me.streak+1:1;bonus=BONUS*Math.min(ns,MAXSTREAK)}return{base,p,bonus}}
+function yest(){const d=new Date();d.setDate(d.getDate()-1);return d.toISOString().slice(0,10)}
+function vDispose(a){
+ let h=head();
+ if(receipt){h+=`<div class="card rcpt"><div style="font-size:40px">✅</div><h2>Disposal verified</h2><p><b>${receipt.q} × ${esc(receipt.item)}</b></p><p class="mut">${receipt.bin} · ${receipt.time}</p><p class="pts">+${receipt.pts} pts</p>${receipt.bonus?`<p class="mut">includes +${receipt.bonus} streak bonus 🔥</p>`:""}<p class="mut">Receipt ${receipt.id}</p><button class="btn alt" id="again" style="margin-top:8px">Dispose more</button></div>`;a.innerHTML=h;$("#again").onclick=()=>{receipt=null;sel=null;qty=1;draw()};return}
+ if(!BINS[bin]){h+=`<div class="card"><h2>Which bin are you at?</h2><p class="mut">Scan the QR on the bin, or pick it here.</p><div class="chips">${Object.keys(BINS).map(k=>`<div class="chip" data-b="${k}">${BINS[k].e} ${BINS[k].n} · ${BINS[k].s}</div>`).join("")}</div></div>`;a.innerHTML=h;a.querySelectorAll("[data-b]").forEach(c=>c.onclick=()=>{bin=c.dataset.b;sel=null;draw()});return}
+ const B=BINS[bin];const left=DAILY-me.todayPts,wait=Math.max(0,COOL-Math.round((Date.now()-me.lastTs)/1000));
+ h+=`<div class="card"><h2>${B.e} ${B.n} <span class="tag">${B.s}</span></h2><p class="mut">What did you put in?</p><div class="chips">${B.items.map(i=>`<div class="chip ${sel==i[0]?"on":""}" data-i="${esc(i[0])}">${esc(i[0])} · ${i[1]}</div>`).join("")}</div>`;
+ if(sel){const c=calc(bin,sel,qty);h+=`<p class="mut" style="margin-top:12px;text-align:center">How many pieces? (max ${MAXQ} per disposal)</p><div class="qty"><button id="mi">−</button><b style="font-size:24px">${qty}</b><button id="pl">+</button></div><p style="text-align:center"><b>${c.base} × ${qty} = ${c.p} pts</b>${c.bonus?` <span class="tag">+${c.bonus} first-today bonus</span>`:""}</p>`;
+  h+=`<button class="btn" id="ok" ${(left<=0||wait>0)?"disabled":""}>I disposed it ✔ Verify</button>`;
+  if(left<=0)h+=`<p class="mut">Daily cap of ${DAILY} pts reached. Come back tomorrow! 🌅</p>`;else if(wait>0)h+=`<p class="mut">Please wait ${wait}s before the next disposal.</p>`}
+ h+=`<button class="btn alt" id="chg" style="margin-top:8px">Change bin</button></div>`;
+ h+=`<div class="card"><h2>How points work</h2><p class="mut">Points = item value × pieces (max ${MAXQ}). Harder-to-recycle items like batteries and e-waste earn the most. First disposal of the day adds a streak bonus (+${BONUS} per day, up to ${BONUS*MAXSTREAK}). Daily cap ${DAILY} pts keeps it fair.</p></div>`;
+ if(me.log.length)h+=`<div class="card"><h2>My recent disposals</h2>${me.log.slice(0,5).map(l=>`<div class="row"><div class="g">${esc(l.q)} × ${esc(l.item)}<div class="mut">${esc(l.time)}</div></div><b>+${l.pts}</b></div>`).join("")}</div>`;
+ a.innerHTML=h;
+ a.querySelectorAll("[data-i]").forEach(c=>c.onclick=()=>{sel=c.dataset.i;draw()});
+ $("#chg").onclick=()=>{bin="";sel=null;history.replaceState(null,"",location.pathname+location.search);draw()};
+ if(sel){$("#mi").onclick=()=>{qty=Math.max(1,qty-1);draw()};$("#pl").onclick=()=>{qty=Math.min(MAXQ,qty+1);draw()};
+  $("#ok").onclick=()=>{const c=calc(bin,sel,qty);const pts=Math.min(c.p+c.bonus,left);
+   me.streak=me.lastDay===day()?me.streak:(me.lastDay===yest()?me.streak+1:1);me.lastDay=day();me.points+=pts;me.todayPts+=pts;me.lastTs=Date.now();
+   const time=new Date().toLocaleString([], {dateStyle:"medium",timeStyle:"short"});
+   const id="EQ-"+Math.random().toString(36).slice(2,8).toUpperCase();
+   receipt={item:sel,q:qty,pts,bonus:c.bonus,bin:B.n+" · "+B.s,time,id};
+   me.log.unshift({item:sel,q:qty,pts,time,id,bin:bin});me.log=me.log.slice(0,20);sel=null;qty=1;save();draw()}}
+}
+function vBoard(a){
+ let list=board.slice();
+ if(!live||!list.find(x=>x.id===uid)){list=list.filter(x=>x.id!==uid);list.push(Object.assign({id:uid||"me"},me))}
+ list.sort((x,y)=>y.points-x.points);
+ const medal=i=>["🥇","🥈","🥉"][i]||i+1;
+ const cls={};list.forEach(p=>{cls[p.cls]=(cls[p.cls]||0)+p.points});
+ const cl=Object.entries(cls).sort((x,y)=>y[1]-x[1]);
+ const mine=p=>(uid&&p.id===uid)||(!uid&&p.id==="me");
+ let h=head()+`<div class="card"><h2>🏆 Top students</h2>${list.slice(0,10).map((p,i)=>`<div class="row ${mine(p)?"me":""}"><b class="r">${medal(i)}</b><div class="g">${esc(p.name)} <span class="mut">${esc(p.cls)}</span></div><b>${p.points}</b></div>`).join("")}</div>`;
+ h+=`<div class="card"><h2>🏫 Class vs class</h2>${cl.map((c,i)=>`<div class="row"><b class="r">${medal(i)}</b><div class="g">Class ${esc(c[0])}</div><b>${c[1]}</b></div>`).join("")}</div>`;
+ if(!live)h+=`<p class="mut">Demo mode: only your own score shows. The shared school leaderboard turns on when students open the shared link signed in.</p>`;
+ a.innerHTML=h;
+}
+function code(){return"EQ-"+Math.random().toString(36).slice(2,7).toUpperCase()}
+function vRewards(a){
+ let h=head()+`<div class="card"><h2>🎁 Rewards ladder</h2>`;
+ h+=TIERS.map(t=>{const un=me.points>=t[0],cd=me.claimed[t[0]];return`<div class="row ${un?"":"lock"}"><div style="font-size:28px">${un?t[1]:"🔒"}</div><div class="g" style="white-space:normal"><b>${t[2]}</b> <span class="tag">${t[0]} pts</span><div class="mut">${t[3]}</div>${cd?`<div><b>Code: ${esc(cd)}</b> <span class="mut">show to your teacher</span></div>`:""}</div>${un&&!cd?`<button class="btn" data-c="${t[0]}" style="width:auto;padding:8px 12px">Claim</button>`:""}</div>`}).join("");
+ h+=`</div><p class="mut">Claim gives a one-time code. The teacher in charge checks it and hands over the reward.</p>`;
+ a.innerHTML=h;a.querySelectorAll("[data-c]").forEach(b=>b.onclick=()=>{me.claimed[b.dataset.c]=code();save();draw()});
+}
+function certLevel(){return me.points>=1000?"Green Champion":me.points>=500?"Eco Warrior":me.points>=100?"Eco Volunteer":null}
+function hours(){return Math.floor(me.points/100)*0.5}
+function vCert(a){
+ const lv=certLevel();
+ let h=head()+`<div class="card"><h2>📜 Eco certificate</h2>`;
+ if(!lv){h+=`<p class="mut">Reach <b>100 pts</b> to unlock your first certificate. Every 100 pts also counts as <b>½ hour of environmental service</b> that your school can add to your record.</p></div>`;a.innerHTML=h;return}
+ h+=`<p class="mut">Level: <b>${lv}</b> · ${hours()} h service credit</p><canvas id="cv" class="cert" width="1000" height="700"></canvas><button class="btn" id="dl" style="margin-top:10px">Save certificate (PNG)</button><p class="mut">Print it, or show it as a school-recognised service record. Earn more points to upgrade it.</p></div>`;
+ a.innerHTML=h;
+ const c=$("#cv"),x=c.getContext("2d");
+ x.fillStyle="#fffdf5";x.fillRect(0,0,1000,700);x.strokeStyle="#2e8b57";x.lineWidth=14;x.strokeRect(24,24,952,652);x.lineWidth=3;x.strokeRect(46,46,908,608);
+ x.textAlign="center";x.fillStyle="#17301f";
+ x.font="bold 54px Georgia,serif";x.fillText("Certificate of Eco Service",500,150);
+ x.font="26px Georgia,serif";x.fillText("This certificate is proudly presented to",500,225);
+ x.fillStyle="#2e8b57";x.font="bold 64px Georgia,serif";x.fillText(me.name,500,315);
+ x.fillStyle="#17301f";x.font="26px Georgia,serif";x.fillText("Class "+me.cls+"  ·  for responsible waste disposal",500,370);
+ x.font="bold 44px Georgia,serif";x.fillText("🌱 "+lv+" 🌱",500,455);
+ x.font="26px Georgia,serif";x.fillText(me.points+" EcoPoints  ·  "+hours()+" hours of environmental service",500,515);
+ x.font="20px Georgia,serif";x.fillText("Issued "+new Date().toLocaleDateString([], {dateStyle:"long"}),500,585);
+ x.fillText("Teacher’s signature: ____________________",500,630);
+ $("#dl").onclick=async()=>{try{const d=await window.claude?.use("downloads");const blob=await new Promise(r=>c.toBlob(r,"image/png"));if(d)await d.save({filename:"eco-certificate-"+me.name.replace(/\W+/g,"-")+".png",data:blob});else{const l=document.createElement("a");l.href=c.toDataURL();l.download="eco-certificate.png";l.click()}}catch(e){}};
+}
+function vBins(a){
+ let base=location.href.split("#")[0];
+ a.innerHTML=`<h1>🖨️ Bin QR codes</h1><div class="card"><p class="mut">Print one QR per bin and stick it on the lid. Each QR opens this page already set to that bin. Paste your final shared link below if the QRs don’t point to it.</p><input id="u" value="${esc(base)}"><div class="qrs" id="q"></div></div>`;
+ const mk=()=>{const q=$("#q");q.innerHTML="";const u=$("#u").value.trim().split("#")[0];
+  Object.keys(BINS).forEach(k=>{const d=document.createElement("div");q.appendChild(d);
+   try{new QRCode(d,{text:u+"#"+k,width:150,height:150,correctLevel:QRCode.CorrectLevel.M})}catch(e){d.textContent="QR unavailable"}
+   const t=document.createElement("div");t.innerHTML=`<b>${BINS[k].e} ${BINS[k].n}</b><br>${BINS[k].s}<br>Scan to earn points`;d.appendChild(t)})};
+ mk();$("#u").oninput=mk;
+}
+init();
+</script></body></html>
